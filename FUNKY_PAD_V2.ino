@@ -54,24 +54,27 @@ const int PIN_MOTOR_R2 = 6;
 const int PIN_MOTOR_R3 = 7;
 
 // 7 DIGIT LED pins
-const int PIN_LED_A = 26;
-const int PIN_LED_B = 27;
-const int PIN_LED_C = 22;
-const int PIN_LED_D = 45;
-const int PIN_LED_E = 44;
-const int PIN_LED_F = 23;
-const int PIN_LED_G = 51;
-const int PIN_LED_DP = 50;
-const int SLOT_1;                                 //>>>>>>>>>>>>>>>>>>>>> TO DEFINE
-const int SLOT_2;                                 //>>>>>>>>>>>>>>>>>>>>> TO DEFINE
-const int SLOT_3;                                 //>>>>>>>>>>>>>>>>>>>>> TO DEFINE
-const int SLOT_4;                                 //>>>>>>>>>>>>>>>>>>>>> TO DEFINE
-
+const int PIN_LED_A = 50;
+const int PIN_LED_B = 44;
+const int PIN_LED_C = 27;
+const int PIN_LED_D = 23;
+const int PIN_LED_E = 22;
+const int PIN_LED_F = 51;
+const int PIN_LED_G = 45;
+const int PIN_LED_DP = 26;
+const int SLOT_1 = 33;
+const int SLOT_2 = 32;
+const int SLOT_3 = 39;
+const int SLOT_4 = 38; 
+                                 
 // Organisation in list of the PINs settings for use in later defined functions
 int pins_left [4] = {PIN_MOTOR_L1, PIN_MOTOR_L2, PIN_MOTOR_L3};
 int pins_right [4] = {PIN_MOTOR_R1, PIN_MOTOR_R2, PIN_MOTOR_R3};
 int* pin_side [3] = {pins_left, pins_right};
 int pins_7_digit [8] = {PIN_LED_A, PIN_LED_B, PIN_LED_C, PIN_LED_D, PIN_LED_E, PIN_LED_F, PIN_LED_G, PIN_LED_DP};
+int SLOTS_7_digit [4] = {SLOT_1, SLOT_2, SLOT_3, SLOT_4};
+
+int SLOT_nbr = 1; // can only be 0 - 1 - 2 - 3
 
 // This define the A/B/C/D/E/F/G/DP standard LEDS on/off of a 7 digit display
 bool off[] = {0,0,0,0,0,0,0,0};
@@ -87,6 +90,8 @@ bool eight[] = {1,1,1,1,1,1,1,0};
 bool nine[] = {1,1,1,1,0,1,1,0};
 bool* display_7_digit[] = {zero, one, two, three, four, five, six, seven, eight, nine, off};
 
+bool state_left = true;
+bool state_right = true;
 
 void setup() {
   Serial.begin(9600);
@@ -97,6 +102,7 @@ void setup() {
   pinMode(PIN_MOTOR_R1, OUTPUT);
   pinMode(PIN_MOTOR_R2, OUTPUT);
   pinMode(PIN_MOTOR_R3, OUTPUT);
+  
   // 7 DIGIT OUTPUT
   pinMode(PIN_LED_A, OUTPUT);
   pinMode(PIN_LED_B, OUTPUT);
@@ -106,6 +112,11 @@ void setup() {
   pinMode(PIN_LED_F, OUTPUT);
   pinMode(PIN_LED_G, OUTPUT);
   pinMode(PIN_LED_DP, OUTPUT);
+  pinMode(SLOT_1, OUTPUT);
+  pinMode(SLOT_2, OUTPUT);
+  pinMode(SLOT_3, OUTPUT);
+  pinMode(SLOT_4, OUTPUT);
+  
   //BUTTON OUTPUT
   pinMode(PIN_OUTPUT_BUTTON, OUTPUT);
   digitalWrite(PIN_OUTPUT_BUTTON, 1);
@@ -135,6 +146,10 @@ void setup() {
   digitalWrite(PIN_LED_F, 0);
   digitalWrite(PIN_LED_G, 0);
   digitalWrite(PIN_LED_DP, 0);
+  digitalWrite(SLOT_1, 0);
+  digitalWrite(SLOT_2, 0);
+  digitalWrite(SLOT_3, 0);
+  digitalWrite(SLOT_4, 0);
   
 }
 
@@ -261,17 +276,19 @@ void display_slot(int num, int SLOT){
 }
 
 void display_steps(int steps){
-  int duration = 100;
   
   int slot1 = steps%10;
   int slot2 = (steps%100) / 10;
   int slot3 = (steps%1000) / 100;
   int slot4 = (steps%10000) / 1000;
-
-  display_slot(slot1, SLOT_1); delay(duration); 
-  display_slot(slot2, SLOT_2); delay(duration);
-  display_slot(slot3, SLOT_3); delay(duration);
-  display_slot(slot4, SLOT_4); delay(duration);
+  int slots [4] = {slot1, slot2, slot3, slot4};
+  //SLOTS_7_digit
+  display_slot(slots[SLOT_nbr], SLOTS_7_digit[SLOT_nbr]);
+  if(SLOT_nbr >= 3){
+    SLOT_nbr = 0;
+  }else{
+    SLOT_nbr++;
+  }
 }
 
 void display_mode(int num){
@@ -286,8 +303,30 @@ void display_mode(int num){
 }
 
 void clear_7_digit(){
-  display_slot(10, SLOT_1);
+  deactivate_all_pins();
   activate_all_slot();
+}
+
+void activate_all_pins(){
+      digitalWrite(PIN_LED_A, 1);
+      digitalWrite(PIN_LED_B, 1);
+      digitalWrite(PIN_LED_C, 1);
+      digitalWrite(PIN_LED_D, 1);
+      digitalWrite(PIN_LED_E, 1);
+      digitalWrite(PIN_LED_F, 1);
+      digitalWrite(PIN_LED_G, 1);
+      digitalWrite(PIN_LED_DP, 1);
+}
+
+void deactivate_all_pins(){
+      digitalWrite(PIN_LED_A, 0);
+      digitalWrite(PIN_LED_B, 0);
+      digitalWrite(PIN_LED_C, 0);
+      digitalWrite(PIN_LED_D, 0);
+      digitalWrite(PIN_LED_E, 0);
+      digitalWrite(PIN_LED_F, 0);
+      digitalWrite(PIN_LED_G, 0);
+      digitalWrite(PIN_LED_DP, 0);
 }
 
 void activate_all_slot(){
@@ -366,78 +405,103 @@ void snooze(int time_between){
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 void motor_activation_proportionnal_to_push(){
+  display_steps(steps);
   float left = analogRead(PIN_INPUT_PIEZO_LEFT_PUSH);
   float right = analogRead(PIN_INPUT_PIEZO_RIGHT_PUSH);
+  display_steps(steps);
+  float treshold = 200;
 
-  Serial.print("LEFT : ");Serial.print(left);Serial.print("\tRIGHT : ");Serial.println(right);
+  //Serial.print("LEFT : ");Serial.print(left);Serial.print("\tRIGHT : ");Serial.println(right);
   
-  if(left>70){
+  if(left>treshold){
     int pwm_left = 81 + left/2;
     if(pwm_left>255){pwm_left=255;}
     activate(pins_left, pwm_left);
+    if(state_left){
+      steps++; 
+      state_left = false ;
+      state_right = true;
+      Serial.print("LEFT \n");
+    }
   }else{
     deactivate(pins_left);
   }
-  if(right>70){
+  display_steps(steps);
+  if(right>treshold){
     int pwm_right = 81 + right/2;
     if(pwm_right>255){pwm_right=255;}
     activate(pins_right, pwm_right);
+    if(state_right){
+      steps++; 
+      state_left = true ;
+      state_right = false;
+      Serial.print("RIGHT \n");}
+    
   }else{
     deactivate(pins_right);
   }
+  display_steps(steps);
 }
 
-void step_count(){
-  int treshold = 100;
-  bool left = 0;
-  bool right = 0;
-
-  float left_trigger = analogRead(PIN_INPUT_PIEZO_LEFT_PUSH);
-  float right_trigger = analogRead(PIN_INPUT_PIEZO_RIGHT_PUSH);
-
-  if(left_trigger>treshold && left==0){
-    activate(pins_left, 255);
-    delay(200);
-    deactivate(pins_left);
-    left=1;
-    steps++;
-  }else{
-    deactivate(pins_left);
-  }
-  if(right_trigger>treshold && right==0){
-    activate(pins_right, 255);
-    delay(200);
-    deactivate(pins_right);
-    right=1;
-    steps++;
-  }else{
-    deactivate(pins_right);
-  }
-}
+//void step_count(){
+//  int treshold = 100;
+//  bool left = 0;
+//  bool right = 0;
+//
+//  float left_trigger = analogRead(PIN_INPUT_PIEZO_LEFT_PUSH);
+//  float right_trigger = analogRead(PIN_INPUT_PIEZO_RIGHT_PUSH);
+//
+//  if(left_trigger>treshold && left==0){
+//    activate(pins_left, 255);
+//    delay(200);
+//    deactivate(pins_left);
+//    left=1;
+//    steps++;
+//  }else{
+//    deactivate(pins_left);
+//  }
+//  if(right_trigger>treshold && right==0){
+//    activate(pins_right, 255);
+//    delay(200);
+//    deactivate(pins_right);
+//    right=1;
+//    steps++;
+//  }else{
+//    deactivate(pins_right);
+//  }
+//}
 
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> UNIT TESTS <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 void test_LED(){
-  while(1){
-    delay(5000);
-    digitalWrite(PIN_LED_A, 1);
-    delay(1000);
-    digitalWrite(PIN_LED_B, 1);
-    delay(1000);
-    digitalWrite(PIN_LED_C, 1);
-    delay(1000);
-    digitalWrite(PIN_LED_D, 1);
-    delay(1000);
-    digitalWrite(PIN_LED_E, 1);
-    delay(1000);
-    digitalWrite(PIN_LED_F, 1);
-    delay(1000);
-    digitalWrite(PIN_LED_G, 1);
-    delay(1000);
-    digitalWrite(PIN_LED_DP, 1);
-    delay(1000);
+    while(1){
+//    delay(1000);
+//      digitalWrite(PIN_LED_A, 1);
+//    delay(1000);
+//      digitalWrite(PIN_LED_B, 1);
+//    delay(1000);
+//      digitalWrite(PIN_LED_C, 1);
+//    delay(1000);
+//      digitalWrite(PIN_LED_D, 1);
+//    delay(1000);
+//      digitalWrite(PIN_LED_E, 1);
+//    delay(1000);
+//      digitalWrite(PIN_LED_F, 1);
+//    delay(1000);
+//      digitalWrite(PIN_LED_G, 1);
+//    delay(1000);
+//      digitalWrite(PIN_LED_DP, 1);
+//      delay(1000);
+
+//    for(int i=0; i<4; i++){
+//      int pin = SLOTS_7_digit[i];
+//      digitalWrite(pin, 1);
+//      delay(1000);
+//    }
+
+      display_steps(1234);
     
     digitalWrite(PIN_LED_A, 0);
     digitalWrite(PIN_LED_B, 0);
